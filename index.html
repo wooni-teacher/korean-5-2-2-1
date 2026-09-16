@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>문장 성분 사목놀이</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --paper:#FFFDF7; --ink:#23303E; --muted:#6B7A8C;
+    --line:#C9D3E0; --sky:#C6D7EE; --blue:#5A86C5; --blue-dark:#3B62A1;
+    --p1:#2BB673; --p1-soft:#D4F3E3; --p2:#F565A3; --p2-soft:#FFDCEB;
+    --warn:#FFF1C2; --danger:#E5533D;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:"Noto Sans KR",sans-serif;font-size:16px}
+  h1,h2,h3,.jua{font-family:"Jua","Noto Sans KR",sans-serif;font-weight:400;letter-spacing:.01em}
+  button{font-family:inherit;font-size:1rem;cursor:pointer;border:0;border-radius:12px;padding:.7rem 1.2rem;background:var(--blue);color:#fff;transition:transform .08s,background .15s}
+  button:hover{background:var(--blue-dark)}
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--blue-dark);border:2px solid var(--sky)}
+  button.ghost:hover{background:var(--sky)}
+  button.danger{background:var(--danger)}
+  button.big{font-family:"Jua";font-size:1.35rem;padding:1rem 1.4rem;border-radius:16px}
+  input[type=text]{font-family:inherit;font-size:1.05rem;padding:.7rem .9rem;border:2px solid var(--line);border-radius:12px;width:100%;background:#fff;color:var(--ink)}
+  input[type=text]:focus{outline:none;border-color:var(--blue)}
+  :focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+  header{background:linear-gradient(180deg,var(--sky),#B3C9E8);border-bottom:6px solid var(--blue);padding:.55rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+  header h1{margin:0;font-size:1.65rem;color:#fff;text-shadow:0 2px 0 var(--blue-dark)}
+  header .who{font-family:"Jua";color:var(--blue-dark);font-size:1rem}
+
+  .screen{display:none;max-width:1080px;margin:0 auto;padding:1.2rem 1rem 3rem}
+  .screen.on{display:block}
+
+  /* lobby */
+  .lobby{display:grid;gap:1.2rem;max-width:520px;margin:2rem auto}
+  .lobby .card{background:#fff;border:2px solid var(--line);border-radius:20px;padding:1.4rem}
+  .lobby h2{margin:0 0 .6rem;font-size:1.5rem;color:var(--blue-dark)}
+  .row{display:flex;gap:.6rem;flex-wrap:wrap}
+  .row>*{flex:1 1 140px}
+  .hint{color:var(--muted);font-size:.9rem;margin:.4rem 0 0}
+
+  /* waiting / rps */
+  .center{text-align:center;padding:2rem 0}
+  .code{font-family:"Jua";font-size:4.5rem;letter-spacing:.3em;color:var(--blue-dark);margin:.4rem 0}
+  .rps{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin:1.2rem 0}
+  .rps button{font-size:3rem;padding:1rem 1.3rem;background:#fff;border:3px solid var(--line);color:var(--ink);border-radius:20px}
+  .rps button:hover{border-color:var(--blue);background:#fff}
+  .rps button.picked{border-color:var(--blue);background:var(--sky)}
+
+  /* game */
+  .game{display:grid;grid-template-columns:1fr 300px;gap:1.2rem;align-items:start}
+  @media(max-width:860px){.game{grid-template-columns:1fr}}
+  .status{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem}
+  .chip{display:inline-flex;align-items:center;gap:.45rem;padding:.4rem .9rem;border-radius:999px;background:#fff;border:2px solid var(--line);font-family:"Jua";font-size:1.05rem}
+  .chip .dot{width:14px;height:14px;border-radius:50%;background:var(--line)}
+  .chip.p1 .dot{background:var(--p1)} .chip.p2 .dot{background:var(--p2)}
+  .chip.turn{border-color:var(--ink);box-shadow:0 0 0 3px var(--warn)}
+  .msg{font-family:"Jua";font-size:1.25rem;margin:.2rem 0 .8rem;min-height:1.6em}
+
+  .boardwrap{overflow-x:auto;background:#fff;border:2px solid var(--line);border-radius:18px;padding:.6rem}
+  table.board{border-collapse:collapse;width:100%;min-width:640px;table-layout:fixed}
+  table.board td{border:2px solid var(--line);text-align:center;height:52px;font-size:.92rem;padding:2px;position:relative;line-height:1.2;word-break:keep-all}
+  table.board td.blank{color:var(--ink)}
+  table.board td.p1{background:var(--p1);color:#fff;font-weight:700}
+  table.board td.p2{background:var(--p2);color:#fff;font-weight:700}
+  table.board td.win{outline:4px solid var(--ink);outline-offset:-4px}
+  table.board td.can{cursor:pointer;background:var(--warn)}
+  table.board td.can:hover{background:#FFE58A}
+  table.board td.pending{background:repeating-linear-gradient(45deg,#fff 0 6px,var(--warn) 6px 12px)}
+  table.board td.mission{background:var(--sky);color:var(--blue-dark);font-size:.7rem;height:64px;font-weight:500;line-height:1.3}
+  .legend{color:var(--muted);font-size:.85rem;margin-top:.5rem}
+
+  .side{display:grid;gap:.9rem}
+  .panel{background:#fff;border:2px solid var(--line);border-radius:18px;padding:1rem}
+  .panel h3{margin:0 0 .6rem;font-size:1.2rem;color:var(--blue-dark)}
+  .log{max-height:320px;overflow:auto;font-size:.9rem;display:grid;gap:.4rem}
+  .log .l{padding:.45rem .6rem;border-radius:10px;background:#F6F8FB;border-left:5px solid var(--line)}
+  .log .l.p1{border-left-color:var(--p1)} .log .l.p2{border-left-color:var(--p2)}
+  .log .l .s{display:block;font-weight:500}
+  .log .l .r{font-size:.8rem;color:var(--muted)}
+  .log .l .r.ok{color:var(--p1)} .log .l .r.no{color:var(--danger)}
+
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(35,48,62,.55);display:none;align-items:center;justify-content:center;padding:1rem;z-index:10}
+  .modal.on{display:flex}
+  .box{background:#fff;border-radius:22px;padding:1.5rem;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .box h2{margin:0 0 .5rem;font-size:1.5rem;color:var(--blue-dark)}
+  .task{background:var(--sky);border-radius:12px;padding:.7rem .9rem;margin:.6rem 0}
+  .task .w{font-family:"Jua";font-size:1.7rem;color:var(--blue-dark)}
+  .sentence{font-family:"Jua";font-size:1.6rem;background:#FFFBEA;border:2px dashed #E9D27A;border-radius:14px;padding:.9rem 1rem;margin:.6rem 0;word-break:keep-all}
+  .check{margin:.5rem 0 .9rem;padding-left:1.2rem;color:var(--ink);line-height:1.7}
+  .judge{display:flex;gap:.7rem}
+  .judge button{flex:1;font-family:"Jua";font-size:1.4rem;padding:1rem}
+  .judge .ok{background:var(--p1)} .judge .no{background:var(--danger)}
+
+  /* teacher */
+  .rooms{display:grid;gap:.7rem;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+  .room{background:#fff;border:2px solid var(--line);border-radius:16px;padding:.9rem;cursor:pointer}
+  .room:hover{border-color:var(--blue)}
+  .room .c{font-family:"Jua";font-size:1.6rem;color:var(--blue-dark)}
+  .room .st{font-size:.85rem;color:var(--muted)}
+  .badge{display:inline-block;padding:.15rem .55rem;border-radius:999px;background:var(--warn);font-size:.8rem;margin-left:.3rem}
+
+  .result{font-family:"Jua";font-size:2.4rem;text-align:center;padding:1.2rem;border-radius:18px;margin-bottom:1rem}
+  .result.p1{background:var(--p1-soft);color:#157A49} .result.p2{background:var(--p2-soft);color:#B4306D} .result.draw{background:var(--sky);color:var(--blue-dark)}
+  .toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%);background:var(--ink);color:#fff;padding:.7rem 1.2rem;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+  .toast.on{opacity:1}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>문장 성분 사목놀이</h1>
+  <div class="who" id="who"></div>
+</header>
+
+<!-- 로비 -->
+<section class="screen on" id="s-lobby">
+  <div class="lobby">
+    <div class="card">
+      <h2>내 이름</h2>
+      <input type="text" id="name" maxlength="10" placeholder="이름을 쓰세요">
+    </div>
+    <div class="card">
+      <h2>방 만들기</h2>
+      <p class="hint">방을 만들면 4자리 방 번호가 생겨요. 친구에게 알려주세요.</p>
+      <button class="big" id="btn-create" style="width:100%;margin-top:.6rem">새 방 만들기</button>
+    </div>
+    <div class="card">
+      <h2>방에 들어가기</h2>
+      <div class="row">
+        <input type="text" id="join-code" maxlength="4" inputmode="numeric" placeholder="방 번호 4자리">
+        <button class="big" id="btn-join">입장</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>선생님 관전</h2>
+      <div class="row">
+        <input type="text" id="admin-pw" placeholder="관리자 비밀번호">
+        <button class="ghost" id="btn-admin">관리자 모드</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 대기 -->
+<section class="screen" id="s-wait">
+  <div class="center">
+    <h2 class="jua" style="font-size:1.6rem">친구가 들어오길 기다리고 있어요</h2>
+    <p>방 번호를 친구에게 알려주세요.</p>
+    <div class="code" id="wait-code"></div>
+    <button class="ghost" id="btn-leave-wait">방 닫기</button>
+  </div>
+</section>
+
+<!-- 가위바위보 -->
+<section class="screen" id="s-rps">
+  <div class="center">
+    <h2 class="jua" style="font-size:1.8rem">가위바위보로 먼저 공격할 사람을 정해요</h2>
+    <p id="rps-vs" class="jua" style="font-size:1.2rem;color:var(--muted)"></p>
+    <div class="rps" id="rps-btns">
+      <button data-v="scissors" aria-label="가위">✌️</button>
+      <button data-v="rock" aria-label="바위">✊</button>
+      <button data-v="paper" aria-label="보">🖐️</button>
+    </div>
+    <p class="msg" id="rps-msg"></p>
+  </div>
+</section>
+
+<!-- 게임 -->
+<section class="screen" id="s-game">
+  <div id="result" class="result" style="display:none"></div>
+  <div class="status">
+    <span class="chip p1" id="chip-p1"><span class="dot"></span><span></span></span>
+    <span class="chip p2" id="chip-p2"><span class="dot"></span><span></span></span>
+    <span style="flex:1"></span>
+    <button class="ghost" id="btn-rematch" style="display:none">다시 하기</button>
+    <button class="ghost" id="btn-exit">나가기</button>
+  </div>
+  <div class="msg" id="game-msg"></div>
+  <div class="game">
+    <div>
+      <div class="boardwrap"><table class="board" id="board"></table></div>
+      <p class="legend">노란 칸을 고르세요. 각 줄은 맨 아래부터 색칠할 수 있어요. 가로·세로·대각선으로 네 칸을 먼저 이으면 승리!</p>
+    </div>
+    <div class="side">
+      <div class="panel" id="teacher-tools" style="display:none">
+        <h3>선생님 도구</h3>
+        <div class="row">
+          <button class="ghost" id="t-judge">판정하기</button>
+          <button class="ghost" id="t-reset">새 게임</button>
+          <button class="danger" id="t-delete">방 삭제</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>만든 문장</h3>
+        <div class="log" id="log"><p class="hint">아직 만든 문장이 없어요.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 선생님 방 목록 -->
+<section class="screen" id="s-admin">
+  <h2 class="jua" style="font-size:1.6rem;color:var(--blue-dark)">진행 중인 방</h2>
+  <p class="hint">방을 누르면 관전할 수 있어요. 문장 판정과 새 게임도 할 수 있어요.</p>
+  <div class="rooms" id="rooms"></div>
+  <p style="margin-top:1rem"><button class="ghost" id="btn-admin-back">로비로</button></p>
+</section>
+
+<!-- 문장 입력 모달 -->
+<div class="modal" id="m-write">
+  <div class="box">
+    <h2>문장 만들기</h2>
+    <div class="task"><div id="w-mission"></div><div class="w" id="w-word"></div></div>
+    <input type="text" id="w-input" maxlength="60" placeholder="문장을 쓰세요">
+    <div class="row" style="margin-top:.8rem">
+      <button class="ghost" id="w-cancel">취소</button>
+      <button id="w-submit">문장 내기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 판정 모달 -->
+<div class="modal" id="m-judge">
+  <div class="box">
+    <h2 id="j-title">상대가 만든 문장을 판정해요</h2>
+    <div class="task"><div id="j-mission"></div><div class="w" id="j-word"></div></div>
+    <div class="sentence" id="j-sentence"></div>
+    <ul class="check" id="j-check"></ul>
+    <div class="judge">
+      <button class="ok" id="j-ok">옳은 문장 ⭕</button>
+      <button class="no" id="j-no">틀린 문장 ❌</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Firebase 설정 (banwel-51) =====
+const firebaseConfig = {
+  apiKey: "AIzaSyB7jCVyieaTKyvarkAvaDLNinxUWppTCdI",
+  authDomain: "banwel-51.firebaseapp.com",
+  databaseURL: "https://banwel-51-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "banwel-51",
+  storageBucket: "banwel-51.firebasestorage.app",
+  messagingSenderId: "489949688381",
+  appId: "1:489949688381:web:680ce2806ba0f2e810b054",
+  measurementId: "G-4ZZ6PVVKR2"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const ROOT = 'munjang4/rooms';
+const ADMIN_PW = '국어수업';
+
+// ===== 학습지 데이터 (index 0 = 맨 위 줄, 7 = 맨 아래 줄) =====
+const COLS = [
+  {m:'칸 속 단어를 주어로 활용해 문장 만들기', w:['비행기','경찰','새','오빠','동생','코끼리','친구','선생님'],
+   c:w=>[`'${w}'이(가) 주어로 쓰였나요?`,'서술어로 문장이 끝나나요?']},
+  {m:'칸 속 단어를 목적어로 활용해 문장 만들기', w:['유튜브','비빔밥','폭탄','책상','사랑','돈','물','책'],
+   c:w=>[`'${w}'이(가) 목적어(을/를)로 쓰였나요?`,'주어와 서술어가 있나요?']},
+  {m:'빈칸에 어울리는 서술어 넣어서 문장 만들기', w:['바다가 (  )','할머니께서 (  )','나는 (  )','핸드폰이 (  )','우리 반은 (  )','도둑이 (  )','선생님께서 (  )','새가 (  )'],
+   c:w=>[`'${w.replace(/\s*\(.*\)/,'')}' 뒤에 어울리는 서술어를 넣었나요?`,'주어와 서술어가 자연스럽게 이어지나요?']},
+  {m:'칸 속 단어 활용해 주어와 서술어가 있는 문장 만들기', w:['강아지','화를 냅니다.','소방관','뛰어갑니다.','날아갑니다.','도망갑니다.','누나','웃습니다.'],
+   c:w=>[`'${w}'을(를) 활용했나요?`,'주어와 서술어가 모두 있나요?']},
+  {m:'칸 속 단어 활용해 주어와 목적어가 있는 문장 만들기', w:['편지','혀','아이돌','모자','하늘','유재석','가위','과자'],
+   c:w=>[`'${w}'을(를) 활용했나요?`,'주어와 목적어가 모두 있나요?']},
+  {m:'칸 속 단어 활용해 주어+목적어+서술어 문장 만들기', w:['안경','쏟았습니다.','웁니다.','고양이','초콜릿','불','수갑','입습니다.'],
+   c:w=>[`'${w}'을(를) 활용했나요?`,'주어, 목적어, 서술어가 모두 있나요?']},
+  {m:'칸 속 단어 활용해 주어와 서술어가 있는 문장 만들기', w:['치웁니다.','탔습니다.','사랑합니다.','맡습니다.','피사의 사탑','칩니다.','석가탑','먹습니다.'],
+   c:w=>[`'${w}'을(를) 활용했나요?`,'주어와 서술어가 모두 있나요?']},
+  {m:'칸 속 단어 활용해 주어+목적어+서술어 문장 만들기', w:['다보탑','던집니다.','자동차','싸웁니다.','꽃','바나나','말','기차'],
+   c:w=>[`'${w}'을(를) 활용했나요?`,'주어, 목적어, 서술어가 모두 있나요?']},
+];
+const ROWS = 8, NCOL = 8;
+
+// ===== 로컬 상태 =====
+let uid = localStorage.getItem('m4uid');
+if(!uid){ uid = Math.random().toString(36).slice(2,10); localStorage.setItem('m4uid', uid); }
+let myName = localStorage.getItem('m4name') || '';
+let roomCode = null, roomRef = null, roomState = null, unsub = null;
+let me = null;              // 'p1' | 'p2' | 'teacher'
+let selecting = null;       // {col,row}
+let adminUnsub = null;
+
+const $ = s => document.querySelector(s);
+const show = id => { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on')); $(id).classList.add('on'); };
+const toast = t => { const el=$('#toast'); el.textContent=t; el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),2200); };
+const key = (r,c) => `${r}_${c}`;
+const other = p => p==='p1'?'p2':'p1';
+const pname = p => (roomState && roomState.players && roomState.players[p]) ? roomState.players[p].name : (p==='p1'?'1번':'2번');
+
+$('#name').value = myName;
+$('#name').addEventListener('input', e => { myName = e.target.value.trim(); localStorage.setItem('m4name', myName); });
+
+function needName(){ if(!myName){ toast('먼저 이름을 써 주세요.'); $('#name').focus(); return false;} return true; }
+
+// ===== 방 만들기 / 입장 =====
+$('#btn-create').onclick = async () => {
+  if(!needName()) return;
+  let code;
+  for(let i=0;i<20;i++){
+    code = String(Math.floor(1000+Math.random()*9000));
+    const snap = await db.ref(`${ROOT}/${code}`).get();
+    if(!snap.exists()) break;
+  }
+  await db.ref(`${ROOT}/${code}`).set({
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    status:'waiting', players:{ p1:{name:myName, uid} }, board:{}, log:[], rpsRound:1
+  });
+  enterRoom(code, 'p1');
+};
+
+$('#btn-join').onclick = async () => {
+  if(!needName()) return;
+  const code = $('#join-code').value.trim();
+  if(!/^\d{4}$/.test(code)) return toast('방 번호 4자리를 써 주세요.');
+  const ref = db.ref(`${ROOT}/${code}`);
+  const snap = await ref.get();
+  if(!snap.exists()) return toast('그 번호의 방이 없어요.');
+  const r = snap.val();
+  if(r.players.p1 && r.players.p1.uid===uid) return enterRoom(code,'p1');
+  if(r.players.p2 && r.players.p2.uid===uid) return enterRoom(code,'p2');
+  if(r.players.p2) return toast('이미 두 명이 들어가 있는 방이에요.');
+  await ref.update({ 'players/p2':{name:myName, uid}, status:'rps' });
+  enterRoom(code,'p2');
+};
+
+function enterRoom(code, role){
+  roomCode = code; me = role;
+  roomRef = db.ref(`${ROOT}/${code}`);
+  if(unsub) roomRef.off();
+  roomRef.on('value', snap => {
+    if(!snap.exists()){ leaveRoom(); toast('방이 닫혔어요.'); return; }
+    roomState = snap.val();
+    render();
+  });
+  unsub = true;
+  $('#who').textContent = role==='teacher' ? `선생님 관전 · 방 ${code}` : `${myName} · 방 ${code}`;
+  $('#teacher-tools').style.display = role==='teacher' ? '' : 'none';
+}
+function leaveRoom(){
+  if(roomRef) roomRef.off();
+  roomRef=null; roomState=null; roomCode=null;
+  $('#who').textContent='';
+  closeModals();
+  const wasTeacher = me==='teacher';
+  me=null;
+  if(wasTeacher) openAdmin(); else show('#s-lobby');
+}
+$('#btn-leave-wait').onclick = async () => { const ref=roomRef; leaveRoom(); await ref.remove(); };
+$('#btn-exit').onclick = () => leaveRoom();
+
+// ===== 화면 렌더링 =====
+function render(){
+  const s = roomState;
+  if(s.status==='waiting'){
+    if(me==='p1'){ $('#wait-code').textContent=roomCode; show('#s-wait'); }
+    else { show('#s-game'); renderGame(); }
+    return;
+  }
+  if(s.status==='rps'){ if(me==='teacher'){ show('#s-game'); renderGame(); } else renderRps(); return; }
+  show('#s-game'); renderGame();
+}
+
+// --- 가위바위보 ---
+const RPS_ICON = {scissors:'✌️', rock:'✊', paper:'🖐️'};
+function renderRps(){
+  show('#s-rps');
+  const s=roomState, rps=s.rps||{};
+  $('#rps-vs').textContent = `${pname('p1')}  vs  ${pname('p2')}   (${s.rpsRound||1}번째)`;
+  document.querySelectorAll('#rps-btns button').forEach(b=>{
+    b.classList.toggle('picked', rps[me]===b.dataset.v);
+    b.disabled = !!rps[me];
+  });
+  const mine=rps[me], theirs=rps[other(me)];
+  $('#rps-msg').textContent = !mine ? '하나를 고르세요!' : (!theirs ? '상대가 고르길 기다리는 중…' : '결과 확인 중…');
+  if(mine && theirs) resolveRps(mine, theirs);
+}
+document.querySelectorAll('#rps-btns button').forEach(b=> b.onclick = () => {
+  if(roomState && !(roomState.rps||{})[me]) roomRef.child(`rps/${me}`).set(b.dataset.v);
+});
+function beats(a,b){ return (a==='rock'&&b==='scissors')||(a==='scissors'&&b==='paper')||(a==='paper'&&b==='rock'); }
+function resolveRps(mine, theirs){
+  const p1=roomState.rps.p1, p2=roomState.rps.p2;
+  if(p1===p2){
+    setTimeout(()=>{ roomRef.transaction(r=>{ if(r && r.status==='rps' && r.rps && r.rps.p1===r.rps.p2){ r.rps=null; r.rpsRound=(r.rpsRound||1)+1; } return r; }); }, 900);
+    $('#rps-msg').textContent = `둘 다 ${RPS_ICON[p1]}! 비겼어요. 다시!`;
+    return;
+  }
+  const first = beats(p1,p2)?'p1':'p2';
+  $('#rps-msg').textContent = `${pname(first)}이(가) 이겼어요. 먼저 공격!`;
+  setTimeout(()=>{ roomRef.transaction(r=>{ if(r && r.status==='rps'){ r.status='playing'; r.turn=first; r.first=first; } return r; }); }, 900);
+}
+
+// --- 게임판 ---
+function lowestEmpty(board, c){
+  for(let r=ROWS-1;r>=0;r--) if(!board[key(r,c)]) return r;
+  return -1;
+}
+function renderGame(){
+  const s=roomState, board=s.board||{}, pend=s.pending;
+  const winSet = new Set((s.winLine||[]).map(x=>key(x[0],x[1])));
+  $('#chip-p1').lastElementChild.textContent = pname('p1') + (me==='p1'?' (나)':'');
+  $('#chip-p2').lastElementChild.textContent = (s.players&&s.players.p2? pname('p2'):'기다리는 중') + (me==='p2'?' (나)':'');
+  $('#chip-p1').classList.toggle('turn', s.status==='playing' && s.turn==='p1');
+  $('#chip-p2').classList.toggle('turn', s.status==='playing' && s.turn==='p2');
+
+  const myTurn = s.status==='playing' && s.turn===me && !pend;
+  let html='';
+  for(let r=0;r<ROWS;r++){
+    html+='<tr>';
+    for(let c=0;c<NCOL;c++){
+      const owner=board[key(r,c)];
+      let cls = owner?owner:'blank';
+      if(pend && pend.col===c && pend.row===r) cls='pending';
+      else if(myTurn && !owner && lowestEmpty(board,c)===r) cls='can';
+      if(winSet.has(key(r,c))) cls+=' win';
+      html+=`<td class="${cls}" data-r="${r}" data-c="${c}">${COLS[c].w[r]}</td>`;
+    }
+    html+='</tr>';
+  }
+  html+='<tr>'+COLS.map(col=>`<td class="mission">${col.m}</td>`).join('')+'</tr>';
+  $('#board').innerHTML=html;
+  if(myTurn) document.querySelectorAll('td.can').forEach(td=> td.onclick=()=>openWrite(+td.dataset.c, +td.dataset.r));
+
+  // 메시지
+  const m=$('#game-msg');
+  if(s.status==='waiting') m.textContent='친구가 들어오길 기다리고 있어요.';
+  else if(s.status==='rps') m.textContent='가위바위보로 순서를 정하는 중이에요.';
+  else if(s.status==='playing'){
+    if(pend) m.textContent = pend.by===me ? `${pname(other(me))}이(가) 내 문장을 판정하는 중…` : `${pname(pend.by)}이(가) 문장을 냈어요.`;
+    else if(me==='teacher') m.textContent = `${pname(s.turn)} 차례예요.`;
+    else m.textContent = s.turn===me ? '내 차례! 노란 칸을 골라 문장을 만드세요.' : `${pname(s.turn)} 차례예요. 기다려요.`;
+  } else m.textContent='';
+
+  // 결과
+  const res=$('#result');
+  if(s.status==='finished'){
+    res.style.display='';
+    res.className='result '+(s.winner||'draw');
+    res.textContent = s.winner ? `🎉 ${pname(s.winner)} 승리! 사목 완성!` : '무승부! 판이 다 찼어요.';
+  } else res.style.display='none';
+  $('#btn-rematch').style.display = (s.status==='finished' && me!=='teacher') ? '' : 'none';
+
+  // 로그
+  const log=Object.values(s.log||{});
+  $('#log').innerHTML = log.length ? log.slice().reverse().map(l=>`<div class="l ${l.by}"><span class="s">${esc(l.sentence)}</span><span class="r ${l.ok?'ok':'no'}">${esc(l.word)} · ${l.ok?'⭕ 색칠 성공':'❌ 실패'}${l.judge==='teacher'?' (선생님 판정)':''}</span></div>`).join('') : '<p class="hint">아직 만든 문장이 없어요.</p>';
+
+  // 판정 모달: 상대 또는 선생님
+  if(pend && me!=='teacher' && pend.by===other(me) && !$('#m-write').classList.contains('on')) openJudge(pend);
+  else if(!pend) $('#m-judge').classList.remove('on');
+  $('#t-judge').disabled = !pend;
+}
+const esc = t => String(t).replace(/[&<>"]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+
+// --- 문장 쓰기 ---
+function openWrite(c,r){
+  selecting={col:c,row:r};
+  $('#w-mission').textContent=COLS[c].m;
+  $('#w-word').textContent=COLS[c].w[r];
+  $('#w-input').value = c===2 ? COLS[c].w[r].replace(/\s*\(.*\)/,' ') : '';
+  $('#m-write').classList.add('on');
+  setTimeout(()=>$('#w-input').focus(),50);
+}
+$('#w-cancel').onclick = () => { $('#m-write').classList.remove('on'); selecting=null; };
+$('#w-input').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#w-submit').click(); });
+$('#w-submit').onclick = async () => {
+  const text=$('#w-input').value.trim();
+  if(text.length<2) return toast('문장을 써 주세요.');
+  if(!selecting) return;
+  const {col,row}=selecting;
+  const ok = await roomRef.transaction(r=>{
+    if(!r || r.status!=='playing' || r.turn!==me || r.pending) return; // 취소
+    if((r.board||{})[key(row,col)]) return;
+    r.pending={col,row,sentence:text,by:me,ts:Date.now()};
+    return r;
+  });
+  $('#m-write').classList.remove('on'); selecting=null;
+  if(!ok.committed) toast('지금은 문장을 낼 수 없어요.');
+};
+
+// --- 판정 ---
+function openJudge(p){
+  const col=COLS[p.col], w=col.w[p.row];
+  $('#j-title').textContent = me==='teacher' ? `${pname(p.by)}의 문장을 판정해요` : `${pname(p.by)}의 문장을 판정해요`;
+  $('#j-mission').textContent=col.m;
+  $('#j-word').textContent=w;
+  $('#j-sentence').textContent=p.sentence;
+  $('#j-check').innerHTML = col.c(w).map(x=>`<li>${esc(x)}</li>`).join('');
+  $('#m-judge').classList.add('on');
+}
+$('#j-ok').onclick = () => judge(true);
+$('#j-no').onclick = () => judge(false);
+async function judge(ok){
+  const res = await roomRef.transaction(r=>{
+    if(!r || !r.pending) return;
+    const p=r.pending;
+    if(!(me==='teacher' || me===other(p.by))) return;
+    r.board=r.board||{}; r.log=r.log||[];
+    const word=COLS[p.col].w[p.row];
+    r.log.push({by:p.by, sentence:p.sentence, word, ok, judge:me, ts:Date.now()});
+    if(ok){
+      r.board[key(p.row,p.col)]=p.by;
+      const line=findWin(r.board, p.row, p.col, p.by);
+      if(line){ r.status='finished'; r.winner=p.by; r.winLine=line; }
+      else if(Object.keys(r.board).length>=ROWS*NCOL){ r.status='finished'; r.winner=null; }
+    }
+    r.pending=null;
+    if(r.status==='playing') r.turn=other(p.by);
+    return r;
+  });
+  $('#m-judge').classList.remove('on');
+  if(!res.committed) toast('이미 판정되었어요.');
+}
+function findWin(board,r,c,p){
+  const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const [dr,dc] of dirs){
+    let line=[[r,c]];
+    for(const sgn of [1,-1]){
+      let rr=r+dr*sgn, cc=c+dc*sgn;
+      while(rr>=0&&rr<ROWS&&cc>=0&&cc<NCOL&&board[key(rr,cc)]===p){ line.push([rr,cc]); rr+=dr*sgn; cc+=dc*sgn; }
+    }
+    if(line.length>=4) return line;
+  }
+  return null;
+}
+
+// --- 다시 하기 / 선생님 도구 ---
+function resetRoom(){
+  return roomRef.update({status:'rps', board:{}, log:[], pending:null, rps:null, rpsRound:1, turn:null, winner:null, winLine:null});
+}
+$('#btn-rematch').onclick = resetRoom;
+$('#t-reset').onclick = () => { if(confirm('이 방을 새 게임으로 되돌릴까요?')) resetRoom(); };
+$('#t-delete').onclick = async () => { if(confirm('이 방을 삭제할까요?')){ const ref=roomRef; leaveRoom(); await ref.remove(); } };
+$('#t-judge').onclick = () => { if(roomState && roomState.pending) openJudge(roomState.pending); };
+
+// ===== 선생님 모드 =====
+$('#btn-admin').onclick = () => {
+  if($('#admin-pw').value!==ADMIN_PW) return toast('비밀번호가 달라요.');
+  $('#admin-pw').value='';
+  openAdmin();
+};
+function openAdmin(){
+  show('#s-admin'); $('#who').textContent='선생님 모드';
+  const ref=db.ref(ROOT);
+  if(adminUnsub) ref.off();
+  ref.on('value', snap=>{
+    const rooms=snap.val()||{};
+    const codes=Object.keys(rooms).sort((a,b)=>(rooms[b].createdAt||0)-(rooms[a].createdAt||0));
+    $('#rooms').innerHTML = codes.length ? codes.map(code=>{
+      const r=rooms[code], p=r.players||{};
+      const st={waiting:'대기 중',rps:'순서 정하는 중',playing:'게임 중',finished:'끝남'}[r.status]||r.status;
+      const pend = r.pending ? '<span class="badge">판정 대기</span>' : '';
+      return `<div class="room" data-code="${code}"><div class="c">${code}${pend}</div><div>${esc(p.p1?p.p1.name:'-')} vs ${esc(p.p2?p.p2.name:'-')}</div><div class="st">${st} · 색칠 ${Object.keys(r.board||{}).length}칸</div></div>`;
+    }).join('') : '<p class="hint">아직 만들어진 방이 없어요.</p>';
+    document.querySelectorAll('.room').forEach(el=> el.onclick=()=>{ ref.off(); adminUnsub=null; enterRoom(el.dataset.code,'teacher'); });
+  });
+  adminUnsub=true;
+}
+$('#btn-admin-back').onclick = () => { db.ref(ROOT).off(); adminUnsub=null; $('#who').textContent=''; show('#s-lobby'); };
+function closeModals(){ document.querySelectorAll('.modal').forEach(m=>m.classList.remove('on')); }
+</script>
+</body>
+</html>
